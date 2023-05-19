@@ -45,31 +45,32 @@ class Go1TrajReplay():
         self.max_stable_time = max_stable_time
         self.control_freq = control_freq
         self.sanity_check = sanity_check
-        self._current_pose = self._get_stable_init_pose()
+        self._current_pose = self._get_stable_pose()
      
         print("Initialization Done")
         
     
-    def _get_stable_init_pose(self):
+    def _get_stable_pose(self):
         prev_pose = self.get_current_pose()
         motion_time = 0
         while True:
             time.sleep(Go1TrajReplay.DEF_SLEEP_TIME)
-            cur_pose = self.get_current_pose()
-            if self.sanity_check:
-                assert self.joint_angle_sanity_check(cur_pose), "JOINT ANGLE OUT OF BOUNDS, STOPPING"
-            if np.all(np.abs(cur_pose - prev_pose) < 0.001):
+            cur_pose = np.zeros(12, dtype=np.float32)
+            self.udp.Recv()
+            self.udp.GetRecv(self.state)
+            for i in range(self.NUM_JOINTS):
+                cur_pose[i] = self.state.motorState[i].q
+            self.udp.Send()
+            
+            if self.joint_angle_sanity_check(cur_pose) and np.all(np.abs(cur_pose - prev_pose) < 0.001):
                 break
+            
             prev_pose = cur_pose
             motion_time += 1
 
             if motion_time >= 10:
                 self.safe.PowerProtect(self.cmd, self.state, 1)
         
-            if motion_time >= self.max_stable_time:
-                print("MAX STABLE TIME REACHED AND STILL NOT STABLE, STOPPING")
-                break
-
         return cur_pose
     
     def stand(self, interpolation_duration=2, standing_duration=1, interpolation_method="linear"):
@@ -88,7 +89,7 @@ class Go1TrajReplay():
         extra_steps = int(extra_duration * self.control_freq)
         tota_steps = interpolation_steps + extra_steps
         
-        self._current_pose = self.get_current_pose()
+        self._current_pose = self._get_stable_pose()
         
         for motion_time in range(tota_steps):
             begin_time = time.time()
