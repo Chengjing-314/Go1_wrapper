@@ -51,6 +51,12 @@ class Go1TrajReplay():
         
     
     def _get_stable_pose(self):
+        """This function retrieve stable position of the legged robot.
+           Please ensure that the robot's join angle is within the bound at the very beginning
+
+        Returns:
+            numpy.ndarray: a (12,1) numpy array of robot's current joint angle and position. 
+        """
         prev_pose = self.get_current_pose()
         motion_time = 0
         while True:
@@ -74,17 +80,37 @@ class Go1TrajReplay():
         return cur_pose
     
     def stand(self, interpolation_duration=2, standing_duration=1, interpolation_method="linear"):
+        """Make the robot stand. 
+
+        Args:
+            interpolation_duration (int, optional): Time to interpolate to position. Defaults to 2 second.
+            standing_duration (int, optional): Time for maintaining the pose. Defaults to 1 second.
+            interpolation_method (str, optional): Method for interpolation('cubic' or 'linear'). Defaults to "linear".
+        """
         
         self.move_to_pose_def(self.STAND, interpolation_duration=interpolation_duration, extra_duration=standing_duration, interpolation_method=interpolation_method)
         
     
     def sit(self, interpolation_duration=2, sitting_duration=1, interpolation_method="linear"):
-        
+        """Make the robot sit.
+
+        Args:
+            interpolation_duration (int, optional): Time to move to target position. Defaults to 2 seconds.
+            sitting_duration (int, optional): Time for maintaining the pose. Defaults to 1 second.
+            interpolation_method (str, optional): Method for interpolation('cubic' or 'linear'). Defaults to "linear".
+        """
         self.move_to_pose_def(self.SIT, interpolation_duration=interpolation_duration, extra_duration=sitting_duration, interpolation_method=interpolation_method)
         
     
     def move_to_pose_def(self, target_position, interpolation_duration=2, extra_duration=1,  interpolation_method="linear"):
-        
+        """Move the whole trajectory to intend poses
+
+        Args:
+            target_position (numpy.ndarray): a (12,) or (12,1) ndarray represent that target pose of the 12 joints.
+            interpolation_duration (int, optional): Time to move to position. Defaults to 2 seconds.
+            extra_duration (int, optional): Time to maintain the target position. Defaults to 1 second.
+            interpolation_method (str, optional): Method for interpolation('cubic' or 'linear'). Defaults to "linear".
+        """
         interpolation_steps = int(interpolation_duration * self.control_freq)
         extra_steps = int(extra_duration * self.control_freq)
         tota_steps = interpolation_steps + extra_steps
@@ -117,6 +143,14 @@ class Go1TrajReplay():
         self.udp.Send()
         
     def move_to_interpolated_pose(self, target_position):
+        """This method is used to make small movement toward the target_position. 
+           Intend to give user more power and flexibility in changing the movement. 
+           Shoule be paried with interpolation by rate.
+
+        Args:
+            target_position (numpy.ndarray): a (12,) or (12,1) array that represent the target
+            of the joint position. 
+        """
         
         begin_time = time.time()
         if self.sanity_check:
@@ -141,6 +175,11 @@ class Go1TrajReplay():
         time.sleep(time_compensation)
                 
     def get_current_pose(self):
+        """get the current position of the robot
+
+        Returns:
+            numpy.ndarray: a (12,) numpy array represent the momentary pose.
+        """
         cur_pose = np.zeros(12, dtype=np.float32)
         self.udp.Recv()
         self.udp.GetRecv(self.state)
@@ -152,6 +191,15 @@ class Go1TrajReplay():
        
         
     def joint_angle_sanity_check(self, joint_angles, num_legs=4):
+        """Check sanity of the joint angle
+
+        Args:
+            joint_angles (numpy.ndarray): a (12,) or (12,1) numpy ndarray represent the angle to be checked.
+            num_legs (int, optional): numer of legs to check. Defaults to 4.
+
+        Returns:
+            boolean: if the constraint are satisfied. 
+        """
         
         assert joint_angles.shape == (3 * num_legs, ) or joint_angles.shape == (3 * num_legs, 1), f"joint angle dimension num_legs * 3 must match with num_legs {num_legs}"
         
@@ -163,7 +211,21 @@ class Go1TrajReplay():
     
     
     def interpolation_complete_traj(self, start_pose, target_pose, num_legs = 4,  num_steps=100, interpolation_method="linear"):
-        
+        """Interpolate the whole trajectory from start pose to target pose. 
+
+        Args:
+            start_pose (numpy.ndarray): starting pose of the robot
+            target_pose (numpy.ndarray): target pose of the robot
+            num_legs (int, optional): number of legs to look at. Defaults to 4.
+            num_steps (int, optional): number of steps between start pose and target pose. Defaults to 100.
+            interpolation_method (str, optional):interpolation method to use('linear' or 'cubic'). Defaults to "linear".
+
+        Raises:
+            ValueError: If Interpolation method not exist
+
+        Returns:
+            numpy.ndarray: a 4 * numsteps * 3 array. 
+        """
         if self.sanity_check:
             assert start_pose.shape == (3 * num_legs,) or start_pose.shape == (3 * num_legs,1), f"start_pose dimension num_legs * 3 must match with num_legs {num_legs}"
             assert target_pose.shape == (3 * num_legs,) or target_pose.shape == (3 * num_legs,1), f"target_pose dimension num_legs * 3 must match with num_legs {num_legs}"
@@ -194,7 +256,21 @@ class Go1TrajReplay():
     
 
     def interpolation_by_rate(self, start_pose, target_pose, num_legs = 4, rate = 0.5, interpolation_method = "linear"):
+        """Interpolation the pose by rate
 
+        Args:
+            start_pose (numpy.ndarray): starting pose of the robot
+            target_pose (numpy.ndarray): target pose of the robot
+            num_legs (int, optional): number of legs on the robot to interpolate. Defaults to 4.
+            rate (float, optional): the rate to interpolation, number between 0 and 1. Defaults to 0.5.
+            interpolation_method (str, optional): interpolation_method (str, optional):interpolation method to use('linear' or 'cubic'). Defaults to "linear".
+
+        Raises:
+            ValueError: If Interpolation method not exist
+
+        Returns:
+            numpy.ndarray: a 4 * numsteps * 3 array. 
+        """
         if self.sanity_check:
             assert start_pose.shape == (3 * num_legs,) or start_pose.shape == (3 * num_legs,1), f"start_pose dimension num_legs * 3 must match with num_legs {num_legs}"
             assert target_pose.shape == (3 * num_legs,) or target_pose.shape == (3 * num_legs,1), f"target_pose dimension num_legs * 3 must match with num_legs {num_legs}"
@@ -226,8 +302,16 @@ class Go1TrajReplay():
         return interpolated_poses
     
     
-    def reshape_interpolated_poses(self, interpolated_poses):
+    def reshape_interpolated_poses(self, interpolated_poses, num_legs = 4):
+        """reshape the returned interpolated poses to num_steps, num_legs * 3
+
+        Args:
+            interpolated_poses (numpy.ndarray): 
+
+        Returns:
+            numpy.ndarray: reshaped array
+        """
     
         num_steps = interpolated_poses.shape[1]
         
-        return np.transpose(interpolated_poses, [1,0,2]).reshape(num_steps, 12)
+        return np.transpose(interpolated_poses, [1,0,2]).reshape(num_steps, num_legs * 3)
