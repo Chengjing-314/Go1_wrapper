@@ -142,7 +142,7 @@ class Go1TrajReplay():
         self.udp.SetSend(self.cmd)
         self.udp.Send()
         
-    def move_to_interpolated_pose(self, target_position):
+    def move_to_interpolated_pose(self, target_position, target_speed = None, frequency = None):
         """This method is used to make small movement toward the target_position. 
            Intend to give user more power and flexibility in changing the movement. 
            Shoule be paried with interpolation by rate.
@@ -162,7 +162,10 @@ class Go1TrajReplay():
         
         for i in range(self.NUM_JOINTS):
             self.cmd.motorCmd[i].q = target_position[i]
-            self.cmd.motorCmd[i].dq = 0
+            if target_speed is not None:
+                self.cmd.motorCmd[i].dq = target_speed[i]
+            else:
+                self.cmd.motorCmd[i].dq = 0
             self.cmd.motorCmd[i].Kp = 60
             self.cmd.motorCmd[i].Kd = 3.0
             self.cmd.motorCmd[i].tau =0
@@ -171,7 +174,10 @@ class Go1TrajReplay():
         self.udp.SetSend(self.cmd)
         self.udp.Send()
         done_time = time.time()
-        time_compensation = np.fmax(0, 1 / self.control_freq - (done_time - begin_time))
+        if frequency is None:
+            time_compensation = np.fmax(0, 1 / self.control_freq - (done_time - begin_time))
+        else:
+            time_compensation = np.fmax(0, 1 / frequency - (done_time - begin_time))
         time.sleep(time_compensation)
                 
     def get_current_pose(self):
@@ -316,7 +322,7 @@ class Go1TrajReplay():
         
         return np.transpose(interpolated_poses, [1,0,2]).reshape(num_steps, num_legs * 3)
     
-    def trajectory_replay(self, trajectories, replay_frequency = 100, maintain_last_pose = True):
+    def trajectory_replay(self, trajectories, speed = None, replay_frequency = 100, maintain_last_pose = True):
         assert trajectories.shape[1] == 12, "Must control all joints and shape n * 12"
         
         start_pose = trajectories[0]
@@ -328,10 +334,10 @@ class Go1TrajReplay():
         self.udp.Send()
         
         for i in range(trajectories.shape[0]-1):
-            start_time = time.time()
-            self.move_to_interpolated_pose(trajectories[i+1])
-            time_compensation = np.fmax(0, 1 / replay_frequency - (time.time() - start_time))
-            time.sleep(time_compensation)
+            if speed is None:
+                self.move_to_interpolated_pose(trajectories[i+1], frequency=replay_frequency)
+            else:
+                self.move_to_interpolated_pose(trajectories[i+1], speed=speed[i], frequency=replay_frequency)
         
         # maintain the last pose
         self.udp.SetSend(self.cmd)
