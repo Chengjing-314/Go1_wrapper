@@ -12,7 +12,7 @@ class Go1TrajReplay():
     NUM_JOINTS = 12
     NUM_LEGS = 4
     DEF_SLEEP_TIME = 0.002
-    JOINT_LIMIT = np.array([         # Hip, Thigh, Calf
+    JOINT_LIMIT = np.array([       # Hip, Thigh, Calf
         [-1.047,    -0.663,      -2.9],  # MIN
         [1.047,     2.966,       -0.837]  # MAX
     ])
@@ -57,8 +57,10 @@ class Go1TrajReplay():
         Returns:
             numpy.ndarray: a (12,1) numpy array of robot's current joint angle and position. 
         """
+        
         prev_pose = self.get_current_pose()
         motion_time = 0
+        start_time = time.time()
         while True:
             time.sleep(Go1TrajReplay.DEF_SLEEP_TIME)
             cur_pose = np.zeros(12, dtype=np.float32)
@@ -76,6 +78,9 @@ class Go1TrajReplay():
 
             if motion_time >= 10:
                 self.safe.PowerProtect(self.cmd, self.state, 1)
+                
+            if time.time() - start_time > self.max_stable_time:
+                raise Exception(f"Robot not stable after {self.max_stable_time} seconds")
         
         return cur_pose
     
@@ -99,6 +104,7 @@ class Go1TrajReplay():
             sitting_duration (int, optional): Time for maintaining the pose. Defaults to 1 second.
             interpolation_method (str, optional): Method for interpolation('cubic' or 'linear'). Defaults to "linear".
         """
+        
         self.move_to_pose_def(self.SIT, interpolation_duration=interpolation_duration, extra_duration=sitting_duration, interpolation_method=interpolation_method)
         
     
@@ -111,6 +117,7 @@ class Go1TrajReplay():
             extra_duration (int, optional): Time to maintain the target position. Defaults to 1 second.
             interpolation_method (str, optional): Method for interpolation('cubic' or 'linear'). Defaults to "linear".
         """
+        
         interpolation_steps = int(interpolation_duration * self.control_freq)
         extra_steps = int(extra_duration * self.control_freq)
         tota_steps = interpolation_steps + extra_steps
@@ -186,6 +193,7 @@ class Go1TrajReplay():
         Returns:
             numpy.ndarray: a (12,) numpy array represent the momentary pose.
         """
+        
         cur_pose = np.zeros(12, dtype=np.float32)
         self.udp.Recv()
         self.udp.GetRecv(self.state)
@@ -232,6 +240,7 @@ class Go1TrajReplay():
         Returns:
             numpy.ndarray: a 4 * numsteps * 3 array. 
         """
+        
         if self.sanity_check:
             assert start_pose.shape == (3 * num_legs,) or start_pose.shape == (3 * num_legs,1), f"start_pose dimension num_legs * 3 must match with num_legs {num_legs}"
             assert target_pose.shape == (3 * num_legs,) or target_pose.shape == (3 * num_legs,1), f"target_pose dimension num_legs * 3 must match with num_legs {num_legs}"
@@ -277,6 +286,7 @@ class Go1TrajReplay():
         Returns:
             numpy.ndarray: a 4 * numsteps * 3 array. 
         """
+        
         if self.sanity_check:
             assert start_pose.shape == (3 * num_legs,) or start_pose.shape == (3 * num_legs,1), f"start_pose dimension num_legs * 3 must match with num_legs {num_legs}"
             assert target_pose.shape == (3 * num_legs,) or target_pose.shape == (3 * num_legs,1), f"target_pose dimension num_legs * 3 must match with num_legs {num_legs}"
@@ -323,6 +333,14 @@ class Go1TrajReplay():
         return np.transpose(interpolated_poses, [1,0,2]).reshape(num_steps, num_legs * 3)
     
     def trajectory_replay(self, trajectories, speed = None, replay_frequency = 100, maintain_last_pose = True):
+        """Replay the trajectory
+
+        Args:
+            trajectories (numpy.ndarray): The trajectory to replay.
+            speed (numpy.ndarray, optional): The speed of the joint, must have the same shape as the trajectories input. Defaults to None.
+            replay_frequency (int, optional): Frequency to replay. Defaults to 100.
+            maintain_last_pose (bool, optional): Let the robot to maintain the last pose. Defaults to True.
+        """
         assert trajectories.shape[1] == 12, "Must control all joints and shape n * 12"
         
         start_pose = trajectories[0]
