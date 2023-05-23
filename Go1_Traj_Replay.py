@@ -315,3 +315,27 @@ class Go1TrajReplay():
         num_steps = interpolated_poses.shape[1]
         
         return np.transpose(interpolated_poses, [1,0,2]).reshape(num_steps, num_legs * 3)
+    
+    def trajectory_replay(self, trajectories, replay_frequency = 100, maintain_last_pose = True):
+        assert trajectories.shape[1] == 12, "Must control all joints and shape n * 12"
+        
+        start_pose = trajectories[0]
+        
+        self.move_to_pose_def(start_pose, interpolation_duration=5, extra_duration=2)
+        
+        # maintain the last pose
+        self.udp.SetSend(self.cmd)
+        self.udp.Send()
+        
+        for i in range(trajectories.shape[0]-1):
+            start_time = time.time()
+            self.move_to_interpolated_pose(trajectories[i+1])
+            time_compensation = np.fmax(0, 1 / replay_frequency - (time.time() - start_time))
+            time.sleep(time_compensation)
+        
+        # maintain the last pose
+        self.udp.SetSend(self.cmd)
+        self.udp.Send()
+        
+        if not maintain_last_pose:
+            self.sit()
