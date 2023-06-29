@@ -1,10 +1,17 @@
+#!/usr/bin/python
+
+
+from Go1_Traj_Replay import Go1TrajReplay
 import sys
 import time
 import math
 import numpy as np
+
+
 sys.path.append('../lib/python/amd64')
 import robot_interface as sdk
-from Go1_Traj_Replay import Go1TrajReplay
+
+
 
 
 
@@ -25,9 +32,14 @@ def main():
     
     go1.sit()
     
-    play_traj = np.load('trajs/play.npy')
+    play_traj = np.load('trajs/play_controlled_60.npy')
     
-    go1.trajectory_replay(play_traj, replay_frequency=160)
+    for i in range(play_traj.shape[0]):
+        if go1.joint_angle_sanity_check(play_traj[i]) == False:
+            print('Joint angle out of range!')
+            break
+    
+    go1.trajectory_replay(play_traj, replay_frequency=60)
     
     go1.sit()
     
